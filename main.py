@@ -236,6 +236,56 @@ def distributions_pmv(v_lower=False):
     plt.tight_layout()
 
 
+def scatter_plot(ind="pmv", x_jitter=0.1):
+    f, axs = plt.subplots(1, 2, sharex=True, sharey=True, constrained_layout=True)
+    for ix, model in enumerate(["pmv_iso", "pmv_ashrae"]):
+        if ind == "pmv":
+            sns.regplot(data=df, x=df[model], y="TSV", ax=axs[ix], x_jitter=0.1)
+            slope, intercept, r_value, p_value, std_err = stats.linregress(
+                y=df["TSV"], x=df[model]
+            )
+        else:
+            sns.regplot(data=df, y=df[model], x="TSV", ax=axs[ix], x_jitter=x_jitter)
+            slope, intercept, r_value, p_value, std_err = stats.linregress(
+                x=df["TSV"], y=df[model]
+            )
+
+        slope, intercept, r_value, p_value, std_err = [
+            round(x, 2) for x in [slope, intercept, r_value, p_value, std_err]
+        ]
+
+        axs[ix].text(
+            0.1,
+            0.1,
+            f"{slope =}, {intercept =},\n{r_value =}, {p_value =}, {std_err =}",
+            transform=axs[ix].transAxes,
+        )
+
+        sns.lineplot(x=[-6, 6], y=[-6, 6], ax=axs[ix])
+        sns.lineplot(x=df["TSV"], y=intercept + df["TSV"] * slope, ax=axs[ix])
+        # sns.scatterplot(data=df, y=df[model], x="TSV", s=5, color=".15", ax=axs[ix])
+        # sns.histplot(data=df, y=df[model], x="TSV", bins=50, pthresh=.1, cmap="mako", ax=axs[ix])
+        # sns.histplot(data=df, y=df[model], x="TSV", bins=50, cmap="mako", ax=axs[ix])
+        # sns.kdeplot(data=df, y=df[model], x="TSV", levels=5, color="w", linewidths=1)
+        axs[ix].set(ylim=(-3.5, 3.5), xlim=(-3.5, 3.5))
+        axs[ix].set_aspect("equal", adjustable="box")
+        axs[ix].set(title=model)
+    plt.tight_layout()
+
+
+def plot_error_prediction(ind="tsv"):
+    f, axs = plt.subplots(1, 2, sharex=True, sharey=True)
+    for ix, model in enumerate(["diff_iso", "diff_ash"]):
+        if ind == "pmv":
+            sns.boxenplot(data=df, y="TSV_round", x=df[model], ax=axs[ix])
+        else:
+            sns.boxenplot(data=df, x="TSV_round", y=df[model], ax=axs[ix])
+        axs[ix].set_aspect("equal", adjustable="box")
+        axs[ix].set(title=model)
+        axs[ix].fill_between([-0.5, 6.5], 0.5, -0.5, color="red", alpha=0.5)
+    plt.tight_layout()
+
+
 if __name__ == "__main__":
 
     # import data
@@ -249,65 +299,17 @@ if __name__ == "__main__":
     sns.set_context("paper")
     mpl.rcParams["figure.figsize"] = [8.0, 6.0]
 
-    bar_chart("pmv")
+    bar_chart(ind="pmv")
     bar_chart("tsv")
 
     distributions_pmv(v_lower=False)
     distributions_pmv(v_lower=0.1)
 
-    f, axs = plt.subplots(1, 2, sharex=True, sharey=True)
-    for ix, model in enumerate(["pmv_iso", "pmv_ashrae"]):
-        sns.regplot(data=df, y=df[model], x="TSV", ax=axs[ix], x_jitter=0.1)
-        slope, intercept, r_value, p_value, std_err = stats.linregress(
-            x=df["TSV"], y=df[model]
-        )
-        sns.lineplot(x=[-6, 6], y=[-6, 6], ax=axs[ix])
-        sns.lineplot(x=df["TSV"], y=intercept + df["TSV"] * slope, ax=axs[ix])
-        # sns.scatterplot(data=df, y=df[model], x="TSV", s=5, color=".15", ax=axs[ix])
-        # sns.histplot(data=df, y=df[model], x="TSV", bins=50, pthresh=.1, cmap="mako", ax=axs[ix])
-        # sns.histplot(data=df, y=df[model], x="TSV", bins=50, cmap="mako", ax=axs[ix])
-        # sns.kdeplot(data=df, y=df[model], x="TSV", levels=5, color="w", linewidths=1)
-        axs[ix].set(ylim=(-3.5, 3.5), xlim=(-3.5, 3.5))
-        axs[ix].set_aspect("equal", adjustable="box")
-        axs[ix].set(title=model)
-    plt.tight_layout()
+    scatter_plot("pmv")
+    scatter_plot("tsv")
 
-    f, axs = plt.subplots(1, 2, sharex=True, sharey=True)
-    for ix, model in enumerate(["pmv_iso", "pmv_ashrae"]):
-        sns.regplot(data=df, x=df[model], y="TSV", ax=axs[ix], x_jitter=0.1)
-        slope, intercept, r_value, p_value, std_err = stats.linregress(
-            y=df["TSV"], x=df[model]
-        )
-        slope, intercept, r_value, p_value, std_err = [
-            round(x, 2) for x in [slope, intercept, r_value, p_value, std_err]
-        ]
-        sns.lineplot(x=[-3, 3], y=[-3, 3], ax=axs[ix])
-        axs[ix].text(
-            0.1,
-            0.1,
-            f"{slope =}, {intercept =}, {r_value =}, {p_value =}, {std_err =}",
-            transform=axs[ix].transAxes,
-        )
-        sns.lineplot(x=df["TSV"], y=intercept + df["TSV"] * slope, ax=axs[ix])
-        # sns.scatterplot(data=df, x=df[model], x="TSV", s=5, color=".15", ax=axs[ix])
-        # sns.histplot(data=df, x=df[model], x="TSV", bins=50, pthresh=.1, cmap="mako", ax=axs[ix])
-        # sns.histplot(data=df, x=df[model], x="TSV", bins=50, cmap="mako", ax=axs[ix])
-        # sns.kdeplot(data=df, x=df[model], x="TSV", levels=5, color="w", linewidths=1)
-        axs[ix].set(ylim=(-3, 3), xlim=(-3, 3))
-        axs[ix].set_aspect("equal", adjustable="box")
-        axs[ix].set(title=model)
-    plt.tight_layout()
-
-    # plot discrepancy
     # todo add counts per boxplot
-
-    f, axs = plt.subplots(1, 2, sharex=True, sharey=True)
-    for ix, model in enumerate(["diff_iso", "diff_ash"]):
-        sns.boxenplot(data=df, x="TSV_round", y=df[model], ax=axs[ix])
-        axs[ix].set_aspect("equal", adjustable="box")
-        axs[ix].set(title=model)
-        axs[ix].fill_between([-0.5, 6.5], 0.5, -0.5, color="red", alpha=0.5)
-    plt.tight_layout()
+    plot_error_prediction(ind="tsv")
 
     f, axs = plt.subplots(1, 2, sharex=True, sharey=True)
     for ix, model in enumerate(["pmv_iso", "pmv_ashrae"]):
@@ -331,28 +333,3 @@ if __name__ == "__main__":
         axs[ix].set_aspect("equal", adjustable="box")
         axs[ix].set(title=model)
     plt.tight_layout()
-
-    f, ax = plt.subplots(3, 1, constrained_layout=True, sharex=True)
-    sns.histplot(data=df, x="SET", kde=True, stat="density", ax=ax[0])
-    sns.histplot(data=df, x="set_py", kde=True, stat="density", ax=ax[1])
-    sns.histplot(data=df, x="SET - set_py", kde=True, stat="density", ax=ax[2])
-    ax[0].set(title="SET")
-    ax[1].set(title="set_py")
-    ax[2].set(title="SET - set_py", xlabel="")
-
-    # df.to_csv(
-    #     r"C:\Users\sbbfti\Google Drive\Shared File - can be deleted\db-results.csv",
-    #     index=False,
-    # )
-    #
-    # pmv_ppd(
-    #     tdb=20.8,
-    #     tr=20.8,
-    #     vr=v_relative(0.05, 1),
-    #     rh=59,
-    #     met=1,
-    #     clo=clo_dynamic(0.64, 1.0),
-    #     standard="ashrae",
-    # )
-    #
-    # round(-2.51)
