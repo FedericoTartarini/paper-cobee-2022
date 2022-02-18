@@ -157,26 +157,19 @@ def calculate_new_indices(df_):
     return df_
 
 
-if __name__ == "__main__":
-
-    # import data
-    df = preprocess_comfort_db_data(limit=False, import_csv=True)
-
-    df = filter_data(df_=df)
-    df = calculate_new_indices(df_=df)
-
-    plt.close("all")
-
-    sns.set_context("paper")
-    mpl.rcParams["figure.figsize"] = [8.0, 6.0]
-
+def bar_chart(ind="pmv"):
     f, axs = plt.subplots(1, 2, sharex=True, sharey=True, constrained_layout=True)
     for ix, model in enumerate(["pmv_iso_round", "pmv_ashrae_round"]):
-        _df = df.groupby(["TSV_round", model])["TSV_round"].count().unstack(model)
+        if ind == "pmv":
+            _df = df.groupby(["TSV_round", model])["TSV_round"].count().unstack(model)
+            x = "TSV_round"
+        else:
+            _df = df.groupby(["TSV_round", model])[model].count().unstack("TSV_round")
+            x = model
         df_total = _df.sum(axis=1)
         df_rel = _df.div(df_total, 0) * 100
         hist = df_rel.reset_index().plot(
-            x="TSV_round",
+            x=x,
             kind="bar",
             stacked=True,
             mark_right=True,
@@ -226,72 +219,41 @@ if __name__ == "__main__":
                         va="center",
                         ha="center",
                     )
-                cum_sum += el
+            cum_sum += el
 
-    f, axs = plt.subplots(1, 2, sharex=True, sharey=True, constrained_layout=True)
-    for ix, model in enumerate(["pmv_iso_round", "pmv_ashrae_round"]):
-        _df = df.groupby(["TSV_round", model])[model].count().unstack("TSV_round")
-        df_total = _df.sum(axis=1)
-        df_rel = _df.div(df_total, 0) * 100
-        hist = df_rel.reset_index().plot(
-            x=model,
-            kind="bar",
-            stacked=True,
-            mark_right=True,
-            width=0.95,
-            rot=0,
-            legend=False,
-            ax=axs[ix],
-            colormap="rainbow",
-        )
-        axs[ix].set(title=model)
 
-        if np.all(df_rel.index == df_rel.columns):
-            diagonal = pd.Series(np.diag(df_rel), index=df_rel.index)
+def distributions_pmv(v_lower=False):
+    # check difference in distribution for V > 0.1
+    variables = ["pmv_iso", "pmv_ashrae", "TSV"]
+    f, axs = plt.subplots(len(variables), 1, sharex=True)
+    if v_lower:
+        data = df[df["V"] > 0.1]
+    else:
+        data = df.copy()
+    for ix, var in enumerate(variables):
+        sns.histplot(data=data, x=var, kde=True, stat="density", ax=axs[ix])
+        axs[ix].set(title=var)
+    plt.tight_layout()
 
-            for ix_s, value in diagonal.items():
-                print(ix_s, value)
-                if value != value:
-                    value = 0
-                axs[ix].text(
-                    ix_s + 3,
-                    105,
-                    f"{value:.0f}%",
-                    va="center",
-                    ha="center",
-                )
 
-        for ix_s, value in enumerate(df.groupby([model])[model].count()):
-            axs[ix].text(
-                ix_s,
-                102,
-                f"#{value:.0f}",
-                va="center",
-                ha="center",
-            )
+if __name__ == "__main__":
 
-        # add percentages
-        df_rel.fillna(0, inplace=True)
-        for index, row in df_rel.iterrows():
-            cum_sum = 0
-            for ixe, el in enumerate(row):
-                if el > 7:
-                    print(el)
-                    axs[ix].text(
-                        index + 3,
-                        cum_sum + el / 2,
-                        f"{int(round(el, 0))}%",
-                        va="center",
-                        ha="center",
-                    )
-                cum_sum += el
+    # import data
+    df = preprocess_comfort_db_data(limit=False, import_csv=True)
 
-    # variables = ["pmv_iso", "pmv_ashrae", "TSV"]
-    # f, axs = plt.subplots(len(variables), 1, sharex=True)
-    # for ix, var in enumerate(variables):
-    #     sns.histplot(data=df, x=var, kde=True, stat="density", ax=axs[ix])
-    #     axs[ix].set(title=var)
-    # plt.tight_layout()
+    df = filter_data(df_=df)
+    df = calculate_new_indices(df_=df)
+
+    plt.close("all")
+
+    sns.set_context("paper")
+    mpl.rcParams["figure.figsize"] = [8.0, 6.0]
+
+    bar_chart("pmv")
+    bar_chart("tsv")
+
+    distributions_pmv(v_lower=False)
+    distributions_pmv(v_lower=0.1)
 
     f, axs = plt.subplots(1, 2, sharex=True, sharey=True)
     for ix, model in enumerate(["pmv_iso", "pmv_ashrae"]):
