@@ -8,24 +8,26 @@ import seaborn as sns
 import warnings
 
 warnings.filterwarnings("ignore")
-
+sns.set_theme(style="whitegrid")
 plt.close("all")
 
-mean_ta = 26
-sd_ta = 0.25
+
+mean_ta = 27
+sd_ta = 0.4
 mean_rh = 50
 sd_rh = 2.5
-mean_v = 0.5
+mean_v = 0.4
 sd_v = 0.05
-mean_met = 1.0
-sd_met = 0.1
-mean_clo = 0.36
+mean_met = 1.05
+sd_met = 0.05
+mean_clo = 0.64
 sd_clo = 0.05
 
-number_points = 2000
+number_points = 1000
 t_range = np.random.normal(mean_ta, sd_ta, number_points)
 rh_range = np.random.normal(mean_rh, sd_rh, number_points)
 v_range = np.random.normal(mean_v, sd_v, number_points)
+v_range = [v if v > 0 else 0 for v in v_range]
 met_range = np.random.normal(mean_met, sd_met, number_points)
 clo_range = np.random.normal(mean_clo, sd_clo, number_points)
 
@@ -68,36 +70,107 @@ df = pd.DataFrame(
 df["delta_iso_ashrae"] = df["pmv_iso"] - df["pmv_ashrae"]
 
 # plot_distribution(df["pmv"])
-#
-# sns.displot(data=df, x="t", y="pmv", kind="kde", rug=True)
-f, ax = plt.subplots(3, 2, sharey=False, constrained_layout=True)
-ax = ax.flat
-sns.histplot(data=df, x="t", kde=True, stat="density", ax=ax[0])
-sns.histplot(data=df, x="t", kde=True, stat="density", ax=ax[1])
-sns.histplot(data=df, x="rh", kde=True, stat="density", ax=ax[2])
-sns.histplot(
-    data=df, x="v", kde=True, stat="density", ax=ax[3], fill=False, color="tab:red"
-)
-sns.histplot(data=df, x="v_r", kde=True, stat="density", ax=ax[3])
-sns.histplot(data=df, x="met", kde=True, stat="density", ax=ax[4])
-sns.histplot(
-    data=df, x="clo", kde=True, stat="density", ax=ax[5], fill=False, color="tab:red"
-)
-sns.histplot(data=df, x="clo_d", kde=True, stat="density", ax=ax[5])
-ax[1].set(xlabel="t_r")
-ax[3].text(0.05, 0.6, "blue - v_r\n red - v", transform=ax[3].transAxes)
-ax[5].text(0.05, 0.6, "blue - clo_d\n red - clo", transform=ax[5].transAxes)
 
-f, ax = plt.subplots(3, 1, sharex=True, sharey=True, constrained_layout=True)
-sns.histplot(data=df, x="pmv_iso", kde=True, stat="density", ax=ax[0])
-sns.histplot(data=df, x="pmv_ashrae", kde=True, stat="density", ax=ax[1])
-sns.histplot(data=df, x="delta_iso_ashrae", kde=True, stat="density", ax=ax[2])
-ax[0].set(title="pmv_iso")
-ax[1].set(title="pmv_ashrae", xlabel="PMV")
-ax[2].set(title="pmv iso - pmv ashrae", xlabel="")
+
+def plot_mean_sd(_ax, data):
+    line = _ax.lines[0]
+    mean = data.mean()
+    std = data.std()
+    xs = line.get_xdata()
+    ys = line.get_ydata()
+    height = np.interp(mean, xs, ys)
+    xy = [val for val in zip(xs, ys) if (val[0] > mean - std) & (val[0] < mean + std)]
+    x = [x[0] for x in xy]
+    y = [y[1] for y in xy]
+    _ax.vlines(mean, 0, height, color="k", ls=":")
+    _ax.fill_between(x, 0, y, facecolor="k", alpha=0.8)
+    _ax.text(
+        0.85,
+        0.7,
+        r"$\mu$" + f"={mean:.2f}\nSD={std:.2f}",
+        ha="center",
+        va="center",
+        transform=_ax.transAxes,
+    )
+
+
+def remove_label(_ax, var):
+    _ax.set(xlabel="")
+    map_var_names = {
+        "t": r"$t$ (°C)",
+        "tr": r"$t_r$ (°C)",
+        "rh": "$RH$ (%)",
+        "vr": r"$v_r$ (m/s)",
+        "met": "$M$ (met)",
+        "clo_d": r"$I_{cl} (clo)$",
+        "pmv_iso": "PMV",
+        "pmv_ashrae": r"PMV$_{CE}$",
+    }
+    _ax.text(
+        0.1,
+        0.7,
+        map_var_names[var],
+        ha="center",
+        va="center",
+        transform=_ax.transAxes,
+    )
+
+
+# sns.displot(data=df, x="t", y="pmv", kind="kde", rug=True)
+f, ax = plt.subplots(4, 2, sharey=True, constrained_layout=True)
+ax = ax.flat
+sns.histplot(data=df, x="t", kde=True, stat="probability", ax=ax[0])
+plot_mean_sd(_ax=ax[0], data=df["t"].values)
+remove_label(_ax=ax[0], var="t")
+sns.histplot(data=df, x="t", kde=True, stat="probability", ax=ax[1])
+plot_mean_sd(_ax=ax[1], data=df["t"].values)
+remove_label(_ax=ax[1], var="tr")
+sns.histplot(data=df, x="rh", kde=True, stat="probability", ax=ax[2])
+plot_mean_sd(_ax=ax[2], data=df["rh"].values)
+remove_label(_ax=ax[2], var="rh")
+# sns.histplot(
+#     data=df, x="v", kde=True, stat="probability", ax=ax[3], fill=False, color="tab:red"
+# )
+# plot_mean_sd(_ax=ax[3], data=df["v"].values)
+sns.histplot(data=df, x="v_r", kde=True, stat="probability", ax=ax[3])
+plot_mean_sd(_ax=ax[3], data=df["v_r"].values)
+remove_label(_ax=ax[3], var="vr")
+sns.histplot(data=df, x="met", kde=True, stat="probability", ax=ax[4])
+plot_mean_sd(_ax=ax[4], data=df["met"].values)
+remove_label(_ax=ax[4], var="met")
+# sns.histplot(
+#     data=df,
+#     x="clo",
+#     kde=True,
+#     stat="probability",
+#     ax=ax[5],
+#     fill=False,
+#     color="tab:red",
+# )
+# plot_mean_sd(_ax=ax[5], data=df["clo"].values)
+sns.histplot(data=df, x="clo_d", kde=True, stat="probability", ax=ax[5])
+plot_mean_sd(_ax=ax[5], data=df["clo_d"].values)
+remove_label(_ax=ax[5], var="clo_d")
+# ax[3].text(0.05, 0.6, "blue - v_r\n red - v", transform=ax[3].transAxes)
+# ax[5].text(0.05, 0.6, "blue - clo_d\n red - clo", transform=ax[5].transAxes)
+
+# f, ax = plt.subplots(2, 1, sharex=True, sharey=True, constrained_layout=True)
+sns.histplot(data=df, x="pmv_iso", kde=True, stat="probability", ax=ax[6])
+plot_mean_sd(_ax=ax[6], data=df["pmv_iso"].values)
+remove_label(_ax=ax[6], var="pmv_iso")
+sns.histplot(data=df, x="pmv_ashrae", kde=True, stat="probability", ax=ax[7])
+plot_mean_sd(_ax=ax[7], data=df["pmv_ashrae"].values)
+remove_label(_ax=ax[7], var="pmv_ashrae")
+plt.savefig("./Manuscript/Figures/error_analysis.png", dpi=300)
+
+
+# sns.histplot(data=df, x="delta_iso_ashrae", kde=True, stat="density", ax=ax[2])
+# ax[0].set(title="pmv_iso")
+# ax[1].set(title="pmv_ashrae", xlabel="PMV")
+# ax[2].set(title="pmv iso - pmv ashrae", xlabel="")
 
 results = []
-pmv_target_value = 0.7
+pmv_target_value = 0.0
 # find the temperature for a specific pmv value
 for iterations in range(1, 1000):
     rh_arr = rh_range[np.random.randint(number_points)]

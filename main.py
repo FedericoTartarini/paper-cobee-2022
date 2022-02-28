@@ -9,6 +9,7 @@ import warnings
 from scipy import stats
 import matplotlib.style
 import matplotlib as mpl
+from scipy import stats
 
 warnings.filterwarnings("ignore")
 
@@ -20,7 +21,6 @@ def preprocess_comfort_db_data(limit, import_csv):
 
     # import DB II data
     df_db2 = pd.read_csv(r"./Data/DatabaseI&II_20180703.csv", encoding="unicode_escape")
-    # df_db2 = pd.read_csv(r"./Data/db-for-analysis.csv", encoding="unicode_escape")
 
     rename_cols = {
         "Thermal sensation": "TSV",
@@ -65,7 +65,7 @@ def preprocess_comfort_db_data(limit, import_csv):
             if row["To"] != row["To"]:
                 row["Tr"] = row["Ta"]
             else:
-                row["Tr"] = (row["Ta"] + row["To"]) / 2
+                row["Tr"] = 2 * row["To"] - row["Ta"]
 
         vr = v_relative(v=row["V"], met=row["Met"])
         clo_d = clo_dynamic(clo=row["Clo"], met=row["Met"])
@@ -132,8 +132,9 @@ def filter_data(df_):
     df_ = df_[(df_["Clo"] >= 0) & (df_["Clo"] <= 1.5)]
     df_ = df_[(df_["Met"] >= 1) & (df_["Met"] <= 4)]
     # todo add more filters based on age and location of the study
-    df_ = df_[(df_["pmv_iso"] > -3.5) & (df_["pmv_iso"] < 3.5)]
-    df_ = df_[(df_["pmv_ashrae"] > -3.5) & (df_["pmv_ashrae"] < 3.5)]
+    df_ = df_[(df_["pmv_iso"] > -2) & (df_["pmv_iso"] < 2)]
+    df_ = df_[(df_["pmv_ashrae"] > -2) & (df_["pmv_ashrae"] < 2)]
+    df_ = df_[(df_["TSV"] > -2) & (df_["TSV"] < 2)]
     # todo analyse the data for V > 0.1 since there is where you can see most of the diff
 
     return df_
@@ -157,18 +158,24 @@ def calculate_new_indices(df_):
     return df_
 
 
-def bar_chart(ind="pmv"):
-    f, axs = plt.subplots(1, 2, sharex=True, sharey=True, constrained_layout=True)
+def bar_chart(data, ind="tsv"):
+    f, axs = plt.subplots(1, 2, sharey=True, constrained_layout=True)
+    map_model_name = {"pmv_iso_round": r"PMV", "pmv_ashrae_round": r"PMV$_{CE}$"}
+
     for ix, model in enumerate(["pmv_iso_round", "pmv_ashrae_round"]):
         if ind == "pmv":
-            _df = df.groupby(["TSV_round", model])["TSV_round"].count().unstack(model)
-            x = "TSV_round"
-        else:
-            _df = df.groupby(["TSV_round", model])[model].count().unstack("TSV_round")
+            _df = data.groupby(["TSV_round", model])[model].count().unstack("TSV_round")
             x = model
+            x_label = "PMV"
+        else:
+            _df = data.groupby(["TSV_round", model])["TSV_round"].count().unstack(model)
+            x = "TSV_round"
+            x_label = "TSV"
         df_total = _df.sum(axis=1)
         df_rel = _df.div(df_total, 0) * 100
-        hist = df_rel.reset_index().plot(
+        df_plot = df_rel.reset_index()
+        df_plot[x] = pd.to_numeric(df_plot[x], downcast="integer")
+        hist = df_plot.plot(
             x=x,
             kind="bar",
             stacked=True,
@@ -177,11 +184,13 @@ def bar_chart(ind="pmv"):
             rot=0,
             legend=False,
             ax=axs[ix],
-            colormap="rainbow",
+            colormap="coolwarm",
         )
-        axs[ix].set(title=model)
+        axs[ix].set(xlabel=x_label, ylabel="Percentage [%]")
+        axs[ix].set_title(map_model_name[model], y=1.06)
         sns.despine(ax=axs[ix], left=True, bottom=True)
 
+        # show accuracy
         if np.all(df_rel.index == df_rel.columns):
             diagonal = pd.Series(np.diag(df_rel), index=df_rel.index)
 
@@ -190,36 +199,63 @@ def bar_chart(ind="pmv"):
                 if value != value:
                     value = 0
                 axs[ix].text(
-                    ix_s + 3,
-                    105,
+                    ix_s + 2,
+                    110,
                     f"{value:.0f}%",
                     va="center",
                     ha="center",
                 )
 
-        for ix_s, value in enumerate(df.groupby(["TSV_round"])["TSV_round"].count()):
+        for ix_s, value in enumerate(data.groupby(["TSV_round"])["TSV_round"].count()):
             axs[ix].text(
                 ix_s,
-                102,
-                f"#{value:.0f}",
+                103,
+                f"{value:.0f}",
                 va="center",
                 ha="center",
             )
 
         # add percentages
-        for index, row in df_rel.iterrows():
+        for index, row in df_rel.fillna(0).iterrows():
             cum_sum = 0
             for ixe, el in enumerate(row):
-                print(ixe)
                 if el > 7:
                     axs[ix].text(
-                        index + 3,
+                        index + 2,
                         cum_sum + el / 2,
                         f"{int(round(el, 0))}%",
                         va="center",
                         ha="center",
                     )
-            cum_sum += el
+                cum_sum += el
+                print(cum_sum)
+
+    if data.V.min() == 0:
+        sm = plt.cm.ScalarMappable(
+            cmap="rainbow", norm=plt.Normalize(vmin=-2.5, vmax=+2.5)
+        )
+        cmap = mpl.cm.rainbow
+        bounds = np.linspace(-2.5, 2.5, 6)
+        norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
+        sm = plt.cm.get_cmap("rainbow", 5)
+        cbar = plt.colorbar(
+            mpl.cm.ScalarMappable(norm=norm, cmap="coolwarm"),
+            ticks=np.linspace(-2, 2, 5),
+            ax=axs,
+            orientation="horizontal",
+            aspect=70,
+        )
+        cbar.ax.set_xticklabels(
+            [
+                "Cool (-2)",
+                "Slightly Cool (-1)",
+                "Neutral (0)",
+                "Slightly Warm (1)",
+                "Warm (2)",
+            ]
+        )
+        cbar.outline.set_visible(False)
+    plt.savefig(f"./Manuscript/Figures/bar_plot_{ind}_Vmin_{data.V.min()}.png", dpi=300)
 
 
 def distributions_pmv(v_lower=False):
@@ -236,7 +272,7 @@ def distributions_pmv(v_lower=False):
     plt.tight_layout()
 
 
-def scatter_plot(ind="pmv", x_jitter=0.1):
+def scatter_plot(ind="tsv", x_jitter=0):
     f, axs = plt.subplots(1, 2, sharex=True, sharey=True, constrained_layout=True)
     for ix, model in enumerate(["pmv_iso", "pmv_ashrae"]):
         if ind == "pmv":
@@ -257,7 +293,7 @@ def scatter_plot(ind="pmv", x_jitter=0.1):
         axs[ix].text(
             0.1,
             0.1,
-            f"{slope =}, {intercept =},\n{r_value =}, {p_value =}, {std_err =}",
+            f"{slope =}, {intercept =},\n{r_value =}, {p_value =}",
             transform=axs[ix].transAxes,
         )
 
@@ -267,26 +303,130 @@ def scatter_plot(ind="pmv", x_jitter=0.1):
         # sns.histplot(data=df, y=df[model], x="TSV", bins=50, pthresh=.1, cmap="mako", ax=axs[ix])
         # sns.histplot(data=df, y=df[model], x="TSV", bins=50, cmap="mako", ax=axs[ix])
         # sns.kdeplot(data=df, y=df[model], x="TSV", levels=5, color="w", linewidths=1)
-        axs[ix].set(ylim=(-3.5, 3.5), xlim=(-3.5, 3.5))
+        axs[ix].set(ylim=(-2.5, 2.5), xlim=(-2.5, 2.5), ylabel="")
         axs[ix].set_aspect("equal", adjustable="box")
         axs[ix].set(title=model)
+        sns.despine(bottom=True, left=True)
+
     plt.tight_layout()
+    plt.savefig("./Manuscript/Figures/scatter_tsv_pmv.png", dpi=300)
 
 
-def plot_error_prediction(ind="tsv"):
-    f, axs = plt.subplots(1, 2, sharex=True, sharey=True)
-    for ix, model in enumerate(["diff_iso", "diff_ash"]):
-        if ind == "pmv":
-            sns.boxenplot(data=df, y="TSV_round", x=df[model], ax=axs[ix])
+def plot_error_prediction(data, ind="tsv"):
+    # f, axs = plt.subplots(1, 2, sharex=True, sharey=True, constrained_layout=True, figsize=(8.0, 3))
+    # for ix, model in enumerate(["diff_iso", "diff_ash"]):
+    #     if ind == "pmv":
+    #         sns.violinplot(data=df, y="TSV_round", x=df[model], ax=axs[ix], size="data")
+    #     else:
+    #         sns.violinplot(data=df, x="TSV_round", y=df[model], ax=axs[ix], size="data")
+    #     axs[ix].set_aspect("equal", adjustable="box")
+    #     axs[ix].set(title=model)
+    #     axs[ix].fill_between([-0.5, 6.5], 0.5, -0.5, color="red", alpha=0.5)
+    # plt.tight_layout()
+
+    f, axs = plt.subplots(1, 1, constrained_layout=True, figsize=(8.0, 3))
+    _df = (
+        data[["TSV_round", "diff_iso", "diff_ash"]]
+        .set_index("TSV_round")
+        .stack()
+        .reset_index()
+    )
+    _df.columns = ["TSV", "model", "delta"]
+    _df["model"] = _df["model"].map({"diff_iso": "PMV", "diff_ash": r"PMV$_{CE}$"})
+    _df["TSV"] = pd.to_numeric(_df["TSV"], downcast="integer")
+    sns.violinplot(
+        data=_df,
+        x="TSV",
+        y="delta",
+        size="data",
+        split=True,
+        hue="model",
+        inner="quartile",
+        color="gray",
+    )
+    axs.set(ylabel="Prediction error")
+    sns.despine(bottom=True, left=True)
+    plt.legend(frameon=False, loc=3)
+
+    acceptable_error = 0.5
+    # t-test
+    for ix, tsv_vote in enumerate(_df["TSV"].sort_values().unique()):
+        print(tsv_vote)
+        sample_1 = _df[(_df["TSV"] == tsv_vote) & (_df["model"] == "PMV")]["delta"]
+        sample_2 = _df[(_df["TSV"] == tsv_vote) & (_df["model"] == "PMV$_{CE}$")][
+            "delta"
+        ]
+        p = round(stats.ttest_ind(sample_1, sample_2).pvalue, 2)
+        if p < 0.01:
+            text_p = r"$p$ < 0.01"
         else:
-            sns.boxenplot(data=df, x="TSV_round", y=df[model], ax=axs[ix])
-        axs[ix].set_aspect("equal", adjustable="box")
-        axs[ix].set(title=model)
-        axs[ix].fill_between([-0.5, 6.5], 0.5, -0.5, color="red", alpha=0.5)
-    plt.tight_layout()
+            text_p = r"$p$ = " + str(p)
+        axs.text(ix, 5, text_p, ha="center")
+        # perc_1 = round(sum(sample_1.abs() <= acceptable_error) / sample_1.shape[0] * 100)
+        # perc_2 = round(sum(sample_2.abs() <= acceptable_error) / sample_1.shape[0] * 100)
+        # axs.text(ix, -0.5, f"{perc_2}%", va="center")
+        # axs.text(ix, 0.5, f"{perc_1}%", ha="right", va="center")
+
+    axs.fill_between(
+        [-0.5, 4.5], acceptable_error, -acceptable_error, color="red", alpha=0.5
+    )
+
+    plt.savefig(
+        f"./Manuscript/Figures/prediction_error_Vmin_{data.V.min()}.png", dpi=300
+    )
+
+
+def plot_distribution_variable():
+    f, axs = plt.subplots(1, 6, constrained_layout=True, figsize=(8, 3))
+
+    for ix, var in enumerate(["Ta", "Tr", "V", "Clo", "Met", "Rh"]):
+        # _df = df[[var, "Year"]]
+        # _df["Year"] = 0
+        # min, max = df[var].min(), df[var].max()
+        # _df = _df.append({var: 999, "Year": 1}, ignore_index=True)
+        # _df["Var"] = var_names[var]
+        # sns.violinplot(
+        #     x=var,
+        #     y="Var",
+        #     ax=axs[ix],
+        #     hue="Year",
+        #     split=True,
+        #     data=_df,
+        #     color="lightgray",
+        #     inner="quartiles",
+        # )
+        sns.boxenplot(y=var, data=df, ax=axs[ix], color="lightgray")
+        # axs[ix].set(xlabel=var_units[var], xlim=(min, max), ylabel="")
+        axs[ix].set(ylabel="", xlabel=f"{var} ({var_units[var]})")
+        # axs[ix].legend_.remove()
+    sns.despine(bottom=True, left=True)
+    plt.savefig("./Manuscript/Figures/dist_input_data.png", dpi=300)
 
 
 if __name__ == "__main__":
+
+    plt.close("all")
+    sns.set_context("paper")
+    mpl.rcParams["figure.figsize"] = [8.0, 3.5]
+    sns.set_theme(style="whitegrid")
+
+    var_names = {
+        "Ta": r"$t_{db}$",
+        "Tr": r"$\overline{t_{r}}$",
+        "V": r"$V$",
+        "Rh": r"$RH$",
+        "Clo": r"$I_{cl}$",
+        "Met": r"$M$",
+    }
+
+    var_units = {
+        "Ta": r"$^{\circ}$C",
+        "Tr": r"$^{\circ}$C",
+        "V": r"m/s",
+        "Rh": r"%",
+        "Clo": r"clo",
+        "Met": r"met",
+    }
 
     # import data
     df = preprocess_comfort_db_data(limit=False, import_csv=True)
@@ -294,22 +434,37 @@ if __name__ == "__main__":
     df = filter_data(df_=df)
     df = calculate_new_indices(df_=df)
 
-    plt.close("all")
+    print(df[df.V > 0.1].shape)
+    print(df[df.V > 0.4].shape)
+    print(df[df.V > 0.8].shape)
+    print(df.shape[0])
+    print(df[~df.TSV.isin(range(-3, 3))].shape[0])
+    df_tpv = df.dropna(subset=["Thermal preference"])
+    print(
+        df_tpv[
+            (df_tpv.TSV_round.isin([-1, 1]))
+            & (df_tpv["Thermal preference"] == "no change")
+        ].shape[0]
+    )
+    print(df_tpv.shape[0])
 
-    sns.set_context("paper")
-    mpl.rcParams["figure.figsize"] = [8.0, 6.0]
+if __name__ == "__plot_figure__":
 
-    bar_chart(ind="pmv")
-    bar_chart("tsv")
+    plot_distribution_variable()
+
+    # bar_chart(ind="pmv")
+    bar_chart(data=df, ind="tsv")
+    bar_chart(data=df[df.V > 0.1], ind="tsv")
 
     distributions_pmv(v_lower=False)
-    distributions_pmv(v_lower=0.1)
+    # distributions_pmv(v_lower=0.1)
 
-    scatter_plot("pmv")
+    # scatter_plot(ind="pmv")
     scatter_plot("tsv")
 
     # todo add counts per boxplot
-    plot_error_prediction(ind="tsv")
+    plot_error_prediction(data=df, ind="tsv")
+    plot_error_prediction(data=df[df.V > 0.1], ind="tsv")
 
     f, axs = plt.subplots(1, 2, sharex=True, sharey=True)
     for ix, model in enumerate(["pmv_iso", "pmv_ashrae"]):
