@@ -10,8 +10,13 @@ from scipy import stats
 import matplotlib.style
 import matplotlib as mpl
 from scipy import stats
+from sklearn.metrics import r2_score, mean_absolute_error
+import psychrolib
 
 warnings.filterwarnings("ignore")
+
+
+psychrolib.SetUnitSystem(psychrolib.SI)
 
 
 def preprocess_comfort_db_data(limit, import_csv):
@@ -126,16 +131,46 @@ def preprocess_comfort_db_data(limit, import_csv):
 def filter_data(df_):
 
     # remove entries outside the Standards' applicability limits
-    df_ = df_[(df_["Ta"] >= 10) & (df_["Ta"] <= 30)]
-    df_ = df_[(df_["Tr_est"] >= 10) & (df_["Tr_est"] <= 40)]
-    df_ = df_[(df_["V"] >= 0) & (df_["V"] <= 1)]
-    df_ = df_[(df_["Clo"] >= 0) & (df_["Clo"] <= 1.5)]
-    df_ = df_[(df_["Met"] >= 1) & (df_["Met"] <= 4)]
-    # todo add more filters based on age and location of the study
-    df_ = df_[(df_["pmv_iso"] > -2) & (df_["pmv_iso"] < 2)]
-    df_ = df_[(df_["pmv_ashrae"] > -2) & (df_["pmv_ashrae"] < 2)]
-    df_ = df_[(df_["TSV"] > -2) & (df_["TSV"] < 2)]
-    # todo analyse the data for V > 0.1 since there is where you can see most of the diff
+    df_ = df_[
+        (df_["Ta"] >= applicability_limits["Ta"][0])
+        & (df_["Ta"] <= applicability_limits["Ta"][1])
+    ]
+    df_ = df_[
+        (df_["Tr_est"] >= applicability_limits["Tr"][0])
+        & (df_["Tr_est"] <= applicability_limits["Tr"][1])
+    ]
+    df_ = df_[
+        (df_["V"] >= applicability_limits["V"][0])
+        & (df_["V"] <= applicability_limits["V"][1])
+    ]
+    df_ = df_[
+        (df_["Clo"] >= applicability_limits["Clo"][0])
+        & (df_["Clo"] <= applicability_limits["Clo"][1])
+    ]
+    df_ = df_[
+        (df_["Met"] >= applicability_limits["Met"][0])
+        & (df_["Met"] <= applicability_limits["Met"][1])
+    ]
+    df_ = df_[
+        (df_["pmv_iso"] > applicability_limits["PMV"][0])
+        & (df_["pmv_iso"] < applicability_limits["PMV"][1])
+    ]
+    df_ = df_[
+        (df_["pmv_ashrae"] > applicability_limits["PMV"][0])
+        & (df_["pmv_ashrae"] < applicability_limits["PMV"][1])
+    ]
+    df_ = df_[
+        (df_["TSV"] > applicability_limits["PMV"][0])
+        & (df_["TSV"] < applicability_limits["PMV"][1])
+    ]
+    pa_arr = []
+    for i, row in df_.iterrows():
+        pa_arr.append(psychrolib.GetVapPresFromRelHum(row["Ta"], row["Rh"] / 100))
+    df_["Pa"] = pa_arr
+    df_ = df_[
+        (df_["Pa"] > applicability_limits["Pa"][0])
+        & (df_["Pa"] < applicability_limits["Pa"][1])
+    ]
 
     return df_
 
@@ -160,7 +195,6 @@ def calculate_new_indices(df_):
 
 def bar_chart(data, ind="tsv"):
     f, axs = plt.subplots(1, 2, sharey=True, constrained_layout=True)
-    map_model_name = {"pmv_iso_round": r"PMV", "pmv_ashrae_round": r"PMV$_{CE}$"}
 
     for ix, model in enumerate(["pmv_iso_round", "pmv_ashrae_round"]):
         if ind == "pmv":
@@ -272,8 +306,9 @@ def distributions_pmv(v_lower=False):
     plt.tight_layout()
 
 
-def scatter_plot(ind="tsv", x_jitter=0):
+def scatter_plot(data, ind="tsv", x_jitter=0):
     f, axs = plt.subplots(1, 2, sharex=True, sharey=True, constrained_layout=True)
+
     for ix, model in enumerate(["pmv_iso", "pmv_ashrae"]):
         if ind == "pmv":
             sns.regplot(data=df, x=df[model], y="TSV", ax=axs[ix], x_jitter=0.1)
@@ -281,31 +316,39 @@ def scatter_plot(ind="tsv", x_jitter=0):
                 y=df["TSV"], x=df[model]
             )
         else:
-            sns.regplot(data=df, y=df[model], x="TSV", ax=axs[ix], x_jitter=x_jitter)
+            sns.regplot(
+                data=data,
+                y=data[model],
+                x="TSV",
+                ax=axs[ix],
+                x_jitter=x_jitter,
+                scatter_kws={"s": 5, "alpha": 0.5, "color": "lightgray"},
+            )
             slope, intercept, r_value, p_value, std_err = stats.linregress(
-                x=df["TSV"], y=df[model]
+                x=data["TSV"], y=data[model]
             )
 
-        slope, intercept, r_value, p_value, std_err = [
-            round(x, 2) for x in [slope, intercept, r_value, p_value, std_err]
-        ]
+        # mean absolute error
+        r2 = r2_score(data["TSV"], data[model])
+        mae = mean_absolute_error(data["TSV"], data[model])
 
         axs[ix].text(
-            0.1,
-            0.1,
-            f"{slope =}, {intercept =},\n{r_value =}, {p_value =}",
+            0.5,
+            1.1,
+            f"m={slope:.2}, b={intercept:.2}, R2={r_value**2:.2}, MAE={mae:.2}\n{map_model_name[model]}",
             transform=axs[ix].transAxes,
+            ha="center",
+            va="center",
         )
 
         sns.lineplot(x=[-6, 6], y=[-6, 6], ax=axs[ix])
-        sns.lineplot(x=df["TSV"], y=intercept + df["TSV"] * slope, ax=axs[ix])
-        # sns.scatterplot(data=df, y=df[model], x="TSV", s=5, color=".15", ax=axs[ix])
-        # sns.histplot(data=df, y=df[model], x="TSV", bins=50, pthresh=.1, cmap="mako", ax=axs[ix])
-        # sns.histplot(data=df, y=df[model], x="TSV", bins=50, cmap="mako", ax=axs[ix])
-        # sns.kdeplot(data=df, y=df[model], x="TSV", levels=5, color="w", linewidths=1)
+        sns.lineplot(x=data["TSV"], y=intercept + data["TSV"] * slope, ax=axs[ix])
+        # sns.scatterplot(data=data, y=data[model], x="TSV", s=5, color=".15", ax=axs[ix])
+        # sns.histplot(data=data, y=data[model], x="TSV", bins=50, pthresh=.1, cmap="mako", ax=axs[ix])
+        # sns.histplot(data=data, y=data[model], x="TSV", bins=50, cmap="mako", ax=axs[ix])
+        # sns.kdeplot(data=data, y=data[model], x="TSV", levels=5, color="w", linewidths=1)
         axs[ix].set(ylim=(-2.5, 2.5), xlim=(-2.5, 2.5), ylabel="")
         axs[ix].set_aspect("equal", adjustable="box")
-        axs[ix].set(title=model)
         sns.despine(bottom=True, left=True)
 
     plt.tight_layout()
@@ -357,19 +400,29 @@ def plot_error_prediction(data, ind="tsv"):
             "delta"
         ]
         p = round(stats.ttest_ind(sample_1, sample_2).pvalue, 2)
+        print(p)
         if p < 0.01:
             text_p = r"$p$ < 0.01"
         else:
             text_p = r"$p$ = " + str(p)
         axs.text(ix, 5, text_p, ha="center")
-        # perc_1 = round(sum(sample_1.abs() <= acceptable_error) / sample_1.shape[0] * 100)
-        # perc_2 = round(sum(sample_2.abs() <= acceptable_error) / sample_1.shape[0] * 100)
-        # axs.text(ix, -0.5, f"{perc_2}%", va="center")
-        # axs.text(ix, 0.5, f"{perc_1}%", ha="right", va="center")
+        perc_1 = round(
+            (sample_1.abs() <= acceptable_error).sum() / sample_1.shape[0] * 100
+        )
+        perc_2 = round(
+            (sample_2.abs() <= acceptable_error).sum() / sample_1.shape[0] * 100
+        )
+        perc_1_1 = round((sample_1.abs() <= 1).sum() / sample_1.shape[0] * 100)
+        perc_2_2 = round((sample_2.abs() <= 1).sum() / sample_1.shape[0] * 100)
+        axs.text(ix + 0.1, -0, f"{perc_2}%", va="center")
+        axs.text(ix + 0.2, -1, f"{perc_2_2}%", va="center")
+        axs.text(ix - 0.1, 0, f"{perc_1}%", ha="right", va="center")
+        axs.text(ix - 0.2, 1, f"{perc_1_1}%", ha="right", va="center")
 
     axs.fill_between(
         [-0.5, 4.5], acceptable_error, -acceptable_error, color="red", alpha=0.5
     )
+    axs.fill_between([-0.5, 4.5], 1, -1, color="red", alpha=0.25)
 
     plt.savefig(
         f"./Manuscript/Figures/prediction_error_Vmin_{data.V.min()}.png", dpi=300
@@ -380,25 +433,15 @@ def plot_distribution_variable():
     f, axs = plt.subplots(1, 6, constrained_layout=True, figsize=(8, 3))
 
     for ix, var in enumerate(["Ta", "Tr", "V", "Clo", "Met", "Rh"]):
-        # _df = df[[var, "Year"]]
-        # _df["Year"] = 0
-        # min, max = df[var].min(), df[var].max()
-        # _df = _df.append({var: 999, "Year": 1}, ignore_index=True)
-        # _df["Var"] = var_names[var]
-        # sns.violinplot(
-        #     x=var,
-        #     y="Var",
-        #     ax=axs[ix],
-        #     hue="Year",
-        #     split=True,
-        #     data=_df,
-        #     color="lightgray",
-        #     inner="quartiles",
-        # )
         sns.boxenplot(y=var, data=df, ax=axs[ix], color="lightgray")
-        # axs[ix].set(xlabel=var_units[var], xlim=(min, max), ylabel="")
-        axs[ix].set(ylabel="", xlabel=f"{var} ({var_units[var]})")
-        # axs[ix].legend_.remove()
+        if var == "Ta":
+            var = "Tr"
+            # axs[ix].fill_between([-0.5, 0.5], 30, 40, color="black", alpha=0.3)
+        axs[ix].set(
+            ylabel="",
+            xlabel=f"{var} ({var_units[var]})",
+            ylim=(applicability_limits[var][0], applicability_limits[var][1]),
+        )
     sns.despine(bottom=True, left=True)
     plt.savefig("./Manuscript/Figures/dist_input_data.png", dpi=300)
 
@@ -409,6 +452,22 @@ if __name__ == "__main__":
     sns.set_context("paper")
     mpl.rcParams["figure.figsize"] = [8.0, 3.5]
     sns.set_theme(style="whitegrid")
+    map_model_name = {
+        "pmv_iso": r"PMV",
+        "pmv_iso_round": r"PMV",
+        "pmv_ashrae_round": r"PMV$_{CE}$",
+        "pmv_ashrae": r"PMV$_{CE}$",
+    }
+    applicability_limits = {
+        "Ta": [10, 30],
+        "Tr": [10, 40],
+        "V": [0, 1],
+        "Clo": [0, 1.5],
+        "Met": [1, 4],
+        "PMV": [-2, 2],
+        "Rh": [0, 100],
+        "Pa": [0, 2700],
+    }
 
     var_names = {
         "Ta": r"$t_{db}$",
@@ -434,10 +493,8 @@ if __name__ == "__main__":
     df = filter_data(df_=df)
     df = calculate_new_indices(df_=df)
 
-    print(df[df.V > 0.1].shape)
-    print(df[df.V > 0.4].shape)
-    print(df[df.V > 0.8].shape)
-    print(df.shape[0])
+    print(f"filtered dataset: {df.shape[0]}")
+    print(f"filtered dataset V>0.1: {df[df.V > 0.1].shape}")
     print(df[~df.TSV.isin(range(-3, 3))].shape[0])
     df_tpv = df.dropna(subset=["Thermal preference"])
     print(
@@ -455,16 +512,18 @@ if __name__ == "__plot_figure__":
     # bar_chart(ind="pmv")
     bar_chart(data=df, ind="tsv")
     bar_chart(data=df[df.V > 0.1], ind="tsv")
+    bar_chart(data=df[df.V > 0.2], ind="tsv")
+    bar_chart(data=df[df.V > 0.4], ind="tsv")
+    bar_chart(data=df[df.V > 0.8], ind="tsv")
+
+    plot_error_prediction(data=df, ind="tsv")
+    plot_error_prediction(data=df[df.V > 0.1], ind="tsv")
 
     distributions_pmv(v_lower=False)
     # distributions_pmv(v_lower=0.1)
 
     # scatter_plot(ind="pmv")
-    scatter_plot("tsv")
-
-    # todo add counts per boxplot
-    plot_error_prediction(data=df, ind="tsv")
-    plot_error_prediction(data=df[df.V > 0.1], ind="tsv")
+    scatter_plot(data=df[df.V > 0.1], ind="tsv")
 
     f, axs = plt.subplots(1, 2, sharex=True, sharey=True)
     for ix, model in enumerate(["pmv_iso", "pmv_ashrae"]):

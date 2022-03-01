@@ -13,6 +13,8 @@ numpy = "*"
 chaospy = "*"
 uncertainpy = "*"
 requests = "*"
+sklearn = "*"
+psychrolib = "*"
 
 [dev-packages]
 
