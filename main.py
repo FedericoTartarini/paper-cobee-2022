@@ -221,10 +221,12 @@ def calculate_new_indices(df_):
 
 def bar_chart(data, ind="tsv", show_per=True, figletter=False):
     if data.V.min() != 0:
-        f, axs = plt.subplots(1, 2, sharey=True, constrained_layout=True)
+        f, axs = plt.subplots(
+            1, 2, sharey=True, constrained_layout=True, figsize=(8.0, 4.1)
+        )
     else:
         f, axs = plt.subplots(
-            1, 2, sharey=True, constrained_layout=True, figsize=(8.0, 2.8)
+            1, 2, sharey=True, constrained_layout=True, figsize=(8.0, 4)
         )
 
     for ix, model in enumerate(["pmv_iso_round", "pmv_ashrae_round"]):
@@ -246,7 +248,8 @@ def bar_chart(data, ind="tsv", show_per=True, figletter=False):
             x = "TSV_round"
             x_label = "TSV"
             axs[ix].set(xlabel=x_label, ylabel="Percentage [%]")
-            axs[ix].set_title(map_model_name[model], y=1.06)
+            if data.V.min() == 0:
+                axs[ix].set_title(map_model_name[model], y=0.9)
         df_total = _df.sum(axis=1)
         df_rel = _df.div(df_total, 0) * 100
         colors = [
@@ -276,19 +279,23 @@ def bar_chart(data, ind="tsv", show_per=True, figletter=False):
             axs[ix].set(xlabel=map_model_name[model], ylabel="Percentage [%]")
         else:
             axs[ix].set(xlabel=x_label, ylabel="Percentage [%]")
-            axs[ix].set_title(map_model_name[model], y=1.1)
-            axs[ix].set_xticklabels(
-                [
-                    "Cold",
-                    "Cool",
-                    "Sl. Cool",
-                    "Neutral",
-                    "Sl. Warm",
-                    "Warm",
-                    "Hot",
-                ],
-                Fontsize=9,
-            )
+            if data.V.min() == 0:
+                axs[ix].set_title(map_model_name[model], y=1.1)
+                axs[ix].set_xticklabels("")
+                axs[ix].set_xlabel("")
+            else:
+                axs[ix].set_xticklabels(
+                    [
+                        "Cold",
+                        "Cool",
+                        "Sl. Cool",
+                        "Neutral",
+                        "Sl. Warm",
+                        "Warm",
+                        "Hot",
+                    ],
+                    Fontsize=9,
+                )
         sns.despine(ax=axs[ix], left=True, bottom=True)
 
         # show accuracy
@@ -296,26 +303,20 @@ def bar_chart(data, ind="tsv", show_per=True, figletter=False):
         df_acc = df_acc[df_acc.index]
         diagonal = pd.Series(np.diag(df_acc), index=df_acc.index)
 
+        axs[ix].grid(axis="x")
+
         for ix_s, value in enumerate(diagonal):
             if value != value:
                 value = 0
             axs[ix].text(
-                ix_s,
-                114,
-                f"{value:.0f}%",
-                va="center",
-                ha="center",
+                ix_s, 110, f"{value:.0f}%", va="center", ha="center", fontsize=9
             )
 
         # show surveys counts
         values = data.groupby([x])[x].count()
         for ix_s, value in enumerate(values):
             axs[ix].text(
-                ix_s,
-                104,
-                f"{value:.0f}",
-                va="center",
-                ha="center",
+                ix_s, 105, f"{value:.0f}", va="center", ha="center", fontsize=9
             )
 
         # add percentages
@@ -333,37 +334,67 @@ def bar_chart(data, ind="tsv", show_per=True, figletter=False):
                         )
                     cum_sum += el
 
-    if data.V.min() != 0:
-        sm = plt.cm.ScalarMappable(cmap=cmap1, norm=plt.Normalize(vmin=-3.5, vmax=+3.5))
-        cmap = mpl.cm.rainbow
-        bounds = np.linspace(-3.5, 3.5, 8)
-        norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
-        sm = plt.cm.get_cmap("rainbow", 5)
-        cbar = plt.colorbar(
-            mpl.cm.ScalarMappable(norm=norm, cmap=cmap1),
-            ticks=np.linspace(-3, 3, 7),
-            ax=axs,
-            orientation="horizontal",
-            aspect=70,
-        )
-        cbar.ax.set_xticklabels(
-            [
-                "-3",
-                "-2",
-                "-1",
-                "0",
-                "1",
-                "2",
-                "3",
-            ]
-        )
-        cbar.outline.set_visible(False)
-        cbar.set_label("PMV")
+    # if data.V.min() != 0:
+    # sm = plt.cm.ScalarMappable(cmap=cmap1, norm=plt.Normalize(vmin=-3.5, vmax=+3.5))
+    # cmap = mpl.cm.rainbow
+    # bounds = np.linspace(-3.5, 3.5, 8)
+    # norm = mpl.colors.BoundaryNorm(bounds, cmap.N)
+    # sm = plt.cm.get_cmap("rainbow", 5)
+    # cbar = plt.colorbar(
+    #     mpl.cm.ScalarMappable(norm=norm, cmap=cmap1),
+    #     ticks=np.linspace(-3, 3, 7),
+    #     ax=axs,
+    #     orientation="horizontal",
+    #     aspect=70,
+    # )
+    # cbar.ax.set_xticklabels(
+    #     [
+    #         "-3",
+    #         "-2",
+    #         "-1",
+    #         "0",
+    #         "1",
+    #         "2",
+    #         "3",
+    #     ]
+    # )
+    # cbar.outline.set_visible(False)
+    # cbar.set_label("PMV")
 
     if figletter:
-        plt.gcf().text(0.05, 0.9, f"{figletter})", weight="bold")
+        plt.gcf().text(0.05, 0.95, f"{figletter})", weight="bold")
 
     plt.savefig(f"./Manuscript/Figures/bar_plot_{ind}_Vmin_{data.V.min()}.png", dpi=300)
+
+
+def legend_pmv():
+    f, ax = plt.subplots()
+
+    import matplotlib.patches as mpatches
+
+    colors = [
+        (33 / 255, 102 / 255, 172 / 255),
+        (103 / 255, 169 / 255, 207 / 255),
+        (209 / 255, 229 / 255, 240 / 255),
+        (153 / 255, 213 / 255, 148 / 255),
+        (253 / 255, 219 / 255, 199 / 255),
+        (239 / 255, 138 / 255, 98 / 255),
+        (178 / 255, 24 / 255, 43 / 255),
+    ]
+
+    ax.legend(
+        handles=[
+            mpatches.Patch(color=colors[ix], label=str(x))
+            for ix, x in enumerate(range(-3, 4))
+        ],
+        frameon=False,
+        mode="expand",
+        bbox_to_anchor=(0, 1.02, 1, 0.2),
+        loc="lower left",
+        ncol=7,
+    )
+    f.text(0.05, 0.95, "PMV = ", va="center", ha="left")
+    ax.grid(False)
 
 
 def distributions_pmv(v_lower=False):
@@ -470,7 +501,7 @@ def scatter_plot(data, ind="tsv", x_jitter=0):
 
 
 def plot_error_prediction(data):
-    f, axs = plt.subplots(1, 1, constrained_layout=True, figsize=(8.0, 5))
+    f, axs = plt.subplots(1, 1, constrained_layout=True, figsize=(8.0, 6))
 
     _df = (
         data[["TSV_round", "diff_iso", "diff_ash"]]
@@ -491,6 +522,18 @@ def plot_error_prediction(data):
         inner="quartile",
         palette=["#3B7EA1", "#FDB515"],
     )
+    acceptable_error = 0.5
+    axs.fill_between(
+        [-0.5, len(_df["TSV"].unique()) - 0.5],
+        acceptable_error,
+        -acceptable_error,
+        color="k",
+        alpha=0.3,
+        edgecolor="b",
+        linewidth=0.0,
+    )
+    axs.set(yticks=([-6, -4, -2, -0.5, 0, 0.5, 2, 4]))
+
     axs.set_xticklabels(
         [
             "Cold",
@@ -502,11 +545,24 @@ def plot_error_prediction(data):
             "Hot",
         ],
     )
+    for label in axs.xaxis.get_majorticklabels():
+        label.set_y(+0.05)
+
     axs.set(ylabel="PMV - TSV")
     sns.despine(bottom=True, left=True)
-    plt.legend(frameon=False, loc=1)
+    # plt.legend(frameon=False, loc=1)
+    # leg = axs.legend()
+    # leg.get_frame().set_edgecolor("b")
+    # leg.get_frame().set_linewidth(0.0)
+    axs.legend(
+        handles=[
+            mpatches.Patch(color="#3B7EA1", label="PMV"),
+            mpatches.Patch(color="#FDB515", label="PMV$_{CE}$"),
+        ],
+        frameon=False,
+        loc=1,
+    )
 
-    acceptable_error = 0.5
     # t-test
     for ix, tsv_vote in enumerate(_df["TSV"].sort_values().unique()):
         sample_1 = _df[(_df["TSV"] == tsv_vote) & (_df["model"] == "PMV")]["delta"]
@@ -516,12 +572,14 @@ def plot_error_prediction(data):
         p = round(stats.ttest_ind(sample_1, sample_2).pvalue, 3)
         if p < 0.01:
             text_p = r"$p$ < 0.01"
-        else:
+        elif p <= 0.05:
             text_p = r"$p$ = " + str(p)
-        if ix < 3:
-            axs.text(ix, -2 - ix, text_p, ha="center", va="center")
         else:
-            axs.text(ix, 7 - ix, text_p, ha="center", va="center")
+            text_p = r"$p$ = " + str(round(p, 1))
+        if ix < 3:
+            axs.text(ix, -2.5 - ix / 2, text_p, ha="center", va="center")
+        else:
+            axs.text(ix, 5.2 - ix / 2, text_p, ha="center", va="center")
         perc_1 = round(
             (sample_1.abs() <= acceptable_error).sum() / sample_1.shape[0] * 100
         )
@@ -565,17 +623,6 @@ def plot_error_prediction(data):
                 ),
             )
 
-    axs.fill_between(
-        [-0.5, len(_df["TSV"].unique()) - 0.5],
-        acceptable_error,
-        -acceptable_error,
-        color="red",
-        alpha=0.5,
-    )
-    # axs.fill_between(
-    #     [-0.5, len(_df["TSV"].unique()) - 0.5], 1, -1, color="red", alpha=0.25
-    # )
-
     plt.savefig(
         f"./Manuscript/Figures/prediction_error_Vmin_{data.V.min()}.png", dpi=300
     )
@@ -604,82 +651,84 @@ def plot_distribution_variable():
 if __name__ == "__main__":
 
     plt.close("all")
-    sns.set_context("paper")
-    mpl.rcParams["figure.figsize"] = [8.0, 3.5]
-    sns.set_theme(style="whitegrid")
-    map_model_name = {
-        "pmv_iso": r"PMV",
-        "pmv_iso_round": r"PMV",
-        "pmv_ashrae_round": r"PMV$_{CE}$",
-        "pmv_ashrae": r"PMV$_{CE}$",
-    }
-    applicability_limits = {
-        "Ta": [10, 30],
-        "Tr": [10, 40],
-        "V": [0, 1],
-        "Clo": [0, 1.5],
-        "Met": [1, 4],
-        "PMV": [-3.5, 3.5],
-        "TSV": [-3.5, 3.5],
-        "Rh": [0, 100],
-        "Pa": [0, 2700],
-    }
+    # sns.set_context("paper")
+    # mpl.rcParams["figure.figsize"] = [8.0, 3.5]
+    # sns.set_theme(style="whitegrid")
+    # map_model_name = {
+    #     "pmv_iso": r"PMV",
+    #     "pmv_iso_round": r"PMV",
+    #     "pmv_ashrae_round": r"PMV$_{CE}$",
+    #     "pmv_ashrae": r"PMV$_{CE}$",
+    # }
+    # applicability_limits = {
+    #     "Ta": [10, 30],
+    #     "Tr": [10, 40],
+    #     "V": [0, 1],
+    #     "Clo": [0, 1.5],
+    #     "Met": [1, 4],
+    #     "PMV": [-3.5, 3.5],
+    #     "TSV": [-3.5, 3.5],
+    #     "Rh": [0, 100],
+    #     "Pa": [0, 2700],
+    # }
+    #
+    # var_names = {
+    #     "Ta": r"$t_{db}$",
+    #     "Tr": r"$\overline{t_{r}}$",
+    #     "V": r"$V$",
+    #     "Rh": r"$RH$",
+    #     "Clo": r"$I_{cl}$",
+    #     "Met": r"$M$",
+    # }
+    #
+    # var_units = {
+    #     "Ta": r"$^{\circ}$C",
+    #     "Tr": r"$^{\circ}$C",
+    #     "V": r"m/s",
+    #     "Rh": r"%",
+    #     "Clo": r"clo",
+    #     "Met": r"met",
+    # }
+    #
+    # # import data
+    # df = preprocess_comfort_db_data(limit=False, import_csv=True)
+    #
+    # df = filter_data(df_=df)
+    # df = calculate_new_indices(df_=df)
+    #
+    # save_var_latex("Tot usable surveys", df.shape[0])
+    # save_var_latex("Tot surveys V higher 0.1", df[df.V > 0.1].shape[0])
+    #
+    # # accuracies calculation
+    # acc_iso = df[df["TSV_round"] == df["pmv_iso_round"]].shape[0] / df.shape[0]
+    # save_var_latex("Overall PMV ISO accuracy", int(acc_iso * 100))
+    # acc_ash = df[df["TSV_round"] == df["pmv_ashrae_round"]].shape[0] / df.shape[0]
+    # save_var_latex("Overall PMV ISO accuracy", int(acc_ash * 100))
+    #
+    # def accuracy_varying_v(v):
+    #     data = df[df["V"] > v]
+    #     data = data[data["TSV_round"] == 0]
+    #     print(f"{v=}")
+    #     print(round(data[data["pmv_iso_round"] == 0].shape[0] / data.shape[0] * 100))
+    #     print(round(data[data["pmv_ashrae_round"] == 0].shape[0] / data.shape[0] * 100))
+    #     print(data.shape[0])
+    #
+    # accuracy_varying_v(0.1)
+    # accuracy_varying_v(0.2)
+    # accuracy_varying_v(0.4)
+    # accuracy_varying_v(0.6)
+    #
+    # print(df[~df.TSV.isin(range(-3, 3))].shape[0])
+    # df_tpv = df.dropna(subset=["Thermal preference"])
+    # print(
+    #     df_tpv[
+    #         (df_tpv.TSV_round.isin([-1, 1]))
+    #         & (df_tpv["Thermal preference"] == "no change")
+    #     ].shape[0]
+    # )
+    # print(df_tpv.shape[0])
 
-    var_names = {
-        "Ta": r"$t_{db}$",
-        "Tr": r"$\overline{t_{r}}$",
-        "V": r"$V$",
-        "Rh": r"$RH$",
-        "Clo": r"$I_{cl}$",
-        "Met": r"$M$",
-    }
-
-    var_units = {
-        "Ta": r"$^{\circ}$C",
-        "Tr": r"$^{\circ}$C",
-        "V": r"m/s",
-        "Rh": r"%",
-        "Clo": r"clo",
-        "Met": r"met",
-    }
-
-    # import data
-    df = preprocess_comfort_db_data(limit=False, import_csv=True)
-
-    df = filter_data(df_=df)
-    df = calculate_new_indices(df_=df)
-
-    save_var_latex("Tot usable surveys", df.shape[0])
-    save_var_latex("Tot surveys V higher 0.1", df[df.V > 0.1].shape[0])
-
-    # accuracies calculation
-    acc_iso = df[df["TSV_round"] == df["pmv_iso_round"]].shape[0] / df.shape[0]
-    save_var_latex("Overall PMV ISO accuracy", int(acc_iso * 100))
-    acc_ash = df[df["TSV_round"] == df["pmv_ashrae_round"]].shape[0] / df.shape[0]
-    save_var_latex("Overall PMV ISO accuracy", int(acc_ash * 100))
-
-    def accuracy_varying_v(v):
-        data = df[df["V"] > v]
-        data = data[data["TSV_round"] == 0]
-        print(f"{v=}")
-        print(round(data[data["pmv_iso_round"] == 0].shape[0] / data.shape[0] * 100))
-        print(round(data[data["pmv_ashrae_round"] == 0].shape[0] / data.shape[0] * 100))
-        print(data.shape[0])
-
-    accuracy_varying_v(0.1)
-    accuracy_varying_v(0.2)
-    accuracy_varying_v(0.4)
-    accuracy_varying_v(0.6)
-
-    print(df[~df.TSV.isin(range(-3, 3))].shape[0])
-    df_tpv = df.dropna(subset=["Thermal preference"])
-    print(
-        df_tpv[
-            (df_tpv.TSV_round.isin([-1, 1]))
-            & (df_tpv["Thermal preference"] == "no change")
-        ].shape[0]
-    )
-    print(df_tpv.shape[0])
+    plot_error_prediction(data=df[df.V > 0.1])
 
 if __name__ == "__plot_figure__":
 
@@ -696,10 +745,10 @@ if __name__ == "__plot_figure__":
     # bar_chart(data=df[(df.TSV == 0) & (df.V > 0.3)], ind="tsv")
     # bar_chart(data=df[(df.TSV == 0) & (df.V > 0.6)], ind="tsv")
     # bar_chart(data=df[(df.TSV == 0) & (df.V > 0.9)], ind="tsv")
+    legend_pmv()
 
     # Figure 3
     # plot_error_prediction(data=df)
-    plot_error_prediction(data=df[df.V > 0.1])
 
     # Figure 4
     scatter_plot(data=df[df.V > 0.1], ind="tsv")
