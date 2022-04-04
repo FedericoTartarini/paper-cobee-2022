@@ -16,6 +16,7 @@ import matplotlib as mpl
 from scipy import stats
 from sklearn.metrics import r2_score, mean_absolute_error
 import psychrolib
+import matplotlib.patches as patches
 
 warnings.filterwarnings("ignore")
 
@@ -45,9 +46,9 @@ def save_var_latex(key, value):
             f.write(f"{key},{dict_var[key]}\n")
 
 
-def preprocess_comfort_db_data(limit, import_csv):
+def preprocess_comfort_db_data(read_csv):
 
-    if import_csv:
+    if read_csv:
         return pd.read_csv(r"./Data/DBII_preprocessed.csv")
 
     # import DB II data
@@ -80,10 +81,6 @@ def preprocess_comfort_db_data(limit, import_csv):
         )
 
     entries_removed(tot_entries, df_db2)
-
-    # only process a sub-set of data
-    if limit:
-        df_db2 = df_db2.head(limit).copy()
 
     df_db2 = df_db2.reset_index(drop=True).copy()
 
@@ -370,8 +367,6 @@ def bar_chart(data, ind="tsv", show_per=True, figletter=False):
 def legend_pmv():
     f, ax = plt.subplots()
 
-    import matplotlib.patches as mpatches
-
     colors = [
         (33 / 255, 102 / 255, 172 / 255),
         (103 / 255, 169 / 255, 207 / 255),
@@ -384,7 +379,7 @@ def legend_pmv():
 
     ax.legend(
         handles=[
-            mpatches.Patch(color=colors[ix], label=str(x))
+            patches.Patch(color=colors[ix], label=str(x))
             for ix, x in enumerate(range(-3, 4))
         ],
         frameon=False,
@@ -463,10 +458,14 @@ def scatter_plot(data, ind="tsv", x_jitter=0):
         r2 = r2_score(data["TSV"], data[model])
         mae = mean_absolute_error(data["TSV"], data[model])
 
+        axs[ix].set(ylim=(-3.5, 3.5))
+
         axs[ix].text(
             0.5,
-            0.87,
-            f"PMV={slope:.2}*TSV{intercept:.2}\nR2={r_value**2:.2}, MAE={mae:.2}",
+            0.85,
+            f"{map_model_name[model]}={slope:.2}*TSV{intercept:.2}\n"
+            + r"R$^2$"
+            + f"={r_value**2:.2}, MAE={mae:.2}",
             transform=axs[ix].transAxes,
             ha="center",
             va="center",
@@ -556,8 +555,8 @@ def plot_error_prediction(data):
     # leg.get_frame().set_linewidth(0.0)
     axs.legend(
         handles=[
-            mpatches.Patch(color="#3B7EA1", label="PMV"),
-            mpatches.Patch(color="#FDB515", label="PMV$_{CE}$"),
+            patches.Patch(color="#3B7EA1", label="PMV"),
+            patches.Patch(color="#FDB515", label="PMV$_{CE}$"),
         ],
         frameon=False,
         loc=1,
@@ -651,86 +650,100 @@ def plot_distribution_variable():
 if __name__ == "__main__":
 
     plt.close("all")
-    # sns.set_context("paper")
-    # mpl.rcParams["figure.figsize"] = [8.0, 3.5]
-    # sns.set_theme(style="whitegrid")
-    # map_model_name = {
-    #     "pmv_iso": r"PMV",
-    #     "pmv_iso_round": r"PMV",
-    #     "pmv_ashrae_round": r"PMV$_{CE}$",
-    #     "pmv_ashrae": r"PMV$_{CE}$",
-    # }
-    # applicability_limits = {
-    #     "Ta": [10, 30],
-    #     "Tr": [10, 40],
-    #     "V": [0, 1],
-    #     "Clo": [0, 1.5],
-    #     "Met": [1, 4],
-    #     "PMV": [-3.5, 3.5],
-    #     "TSV": [-3.5, 3.5],
-    #     "Rh": [0, 100],
-    #     "Pa": [0, 2700],
-    # }
-    #
-    # var_names = {
-    #     "Ta": r"$t_{db}$",
-    #     "Tr": r"$\overline{t_{r}}$",
-    #     "V": r"$V$",
-    #     "Rh": r"$RH$",
-    #     "Clo": r"$I_{cl}$",
-    #     "Met": r"$M$",
-    # }
-    #
-    # var_units = {
-    #     "Ta": r"$^{\circ}$C",
-    #     "Tr": r"$^{\circ}$C",
-    #     "V": r"m/s",
-    #     "Rh": r"%",
-    #     "Clo": r"clo",
-    #     "Met": r"met",
-    # }
-    #
-    # # import data
-    # df = preprocess_comfort_db_data(limit=False, import_csv=True)
-    #
-    # df = filter_data(df_=df)
-    # df = calculate_new_indices(df_=df)
-    #
-    # save_var_latex("Tot usable surveys", df.shape[0])
-    # save_var_latex("Tot surveys V higher 0.1", df[df.V > 0.1].shape[0])
-    #
-    # # accuracies calculation
-    # acc_iso = df[df["TSV_round"] == df["pmv_iso_round"]].shape[0] / df.shape[0]
-    # save_var_latex("Overall PMV ISO accuracy", int(acc_iso * 100))
-    # acc_ash = df[df["TSV_round"] == df["pmv_ashrae_round"]].shape[0] / df.shape[0]
-    # save_var_latex("Overall PMV ISO accuracy", int(acc_ash * 100))
-    #
-    # def accuracy_varying_v(v):
-    #     data = df[df["V"] > v]
-    #     data = data[data["TSV_round"] == 0]
-    #     print(f"{v=}")
-    #     print(round(data[data["pmv_iso_round"] == 0].shape[0] / data.shape[0] * 100))
-    #     print(round(data[data["pmv_ashrae_round"] == 0].shape[0] / data.shape[0] * 100))
-    #     print(data.shape[0])
-    #
-    # accuracy_varying_v(0.1)
-    # accuracy_varying_v(0.2)
-    # accuracy_varying_v(0.4)
-    # accuracy_varying_v(0.6)
-    #
-    # print(df[~df.TSV.isin(range(-3, 3))].shape[0])
-    # df_tpv = df.dropna(subset=["Thermal preference"])
-    # print(
-    #     df_tpv[
-    #         (df_tpv.TSV_round.isin([-1, 1]))
-    #         & (df_tpv["Thermal preference"] == "no change")
-    #     ].shape[0]
-    # )
-    # print(df_tpv.shape[0])
+    sns.set_context("paper")
+    mpl.rcParams["figure.figsize"] = [8.0, 3.5]
+    sns.set_theme(style="whitegrid")
+    map_model_name = {
+        "pmv_iso": r"PMV",
+        "pmv_iso_round": r"PMV",
+        "pmv_ashrae_round": r"PMV$_{CE}$",
+        "pmv_ashrae": r"PMV$_{CE}$",
+    }
+    applicability_limits = {
+        "Ta": [10, 30],
+        "Tr": [10, 40],
+        "V": [0, 1],
+        "Clo": [0, 1.5],
+        "Met": [1, 4],
+        "PMV": [-3.5, 3.5],
+        "TSV": [-3.5, 3.5],
+        "Rh": [0, 100],
+        "Pa": [0, 2700],
+    }
 
-    plot_error_prediction(data=df[df.V > 0.1])
+    var_names = {
+        "Ta": r"$t_{db}$",
+        "Tr": r"$\overline{t_{r}}$",
+        "V": r"$V$",
+        "Rh": r"$RH$",
+        "Clo": r"$I_{cl}$",
+        "Met": r"$M$",
+    }
 
-if __name__ == "__plot_figure__":
+    var_units = {
+        "Ta": r"$^{\circ}$C",
+        "Tr": r"$^{\circ}$C",
+        "V": r"m/s",
+        "Rh": r"%",
+        "Clo": r"clo",
+        "Met": r"met",
+    }
+
+    # import data
+    df = preprocess_comfort_db_data(read_csv=True)
+
+    df = filter_data(df_=df)
+    df = calculate_new_indices(df_=df)
+
+    save_var_latex("Tot usable surveys", df.shape[0])
+    save_var_latex("Tot surveys V higher 0.1", df[df.V > 0.1].shape[0])
+
+    # accuracies calculation
+    for limit in [3, 2, 1]:
+        data = df[df["TSV_round"].abs() <= limit]
+        data_iso = data[df["pmv_iso_round"].abs() <= limit]
+        data_ash = data[df["pmv_ashrae_round"].abs() <= limit]
+
+        # check
+        print(data_iso["pmv_iso_round"].sort_values().unique())
+        print(data_ash["pmv_ashrae_round"].sort_values().unique())
+        print(data["TSV_round"].sort_values().unique())
+
+        acc_iso = (
+            data_iso[data_iso["TSV_round"] == data_iso["pmv_iso_round"]].shape[0]
+            / data_iso.shape[0]
+        )
+        save_var_latex(f"Overall PMV ISO accuracy - limit {limit}", int(acc_iso * 100))
+        acc_ash = (
+            data_ash[data_ash["TSV_round"] == data_ash["pmv_ashrae_round"]].shape[0]
+            / data_ash.shape[0]
+        )
+        save_var_latex(
+            f"Overall PMV ASHRAE accuracy - limit {limit}", int(acc_ash * 100)
+        )
+
+    def accuracy_varying_v(v):
+        data = df[df["V"] > v]
+        data = data[data["TSV_round"] == 0]
+        print(f"{v=}")
+        print(round(data[data["pmv_iso_round"] == 0].shape[0] / data.shape[0] * 100))
+        print(round(data[data["pmv_ashrae_round"] == 0].shape[0] / data.shape[0] * 100))
+        print(data.shape[0])
+
+    accuracy_varying_v(0.1)
+    accuracy_varying_v(0.2)
+    accuracy_varying_v(0.4)
+    accuracy_varying_v(0.6)
+
+    print(df[~df.TSV.isin(range(-3, 3))].shape[0])
+    df_tpv = df.dropna(subset=["Thermal preference"])
+    print(
+        df_tpv[
+            (df_tpv.TSV_round.isin([-1, 1]))
+            & (df_tpv["Thermal preference"] == "no change")
+        ].shape[0]
+    )
+    print(df_tpv.shape[0])
 
     # Figure 1
     plot_distribution_variable()
@@ -748,35 +761,9 @@ if __name__ == "__plot_figure__":
     legend_pmv()
 
     # Figure 3
-    # plot_error_prediction(data=df)
+    plot_error_prediction(data=df[df.V > 0.1])
 
     # Figure 4
     scatter_plot(data=df[df.V > 0.1], ind="tsv")
     # scatter_plot(data=df, ind="pmv")
     # scatter_plot(data=df, ind="tsv")
-
-    distributions_pmv(v_lower=False)
-    # distributions_pmv(v_lower=0.1)
-
-    f, axs = plt.subplots(1, 2, sharex=True, sharey=True)
-    for ix, model in enumerate(["pmv_iso", "pmv_ashrae"]):
-        sns.regplot(
-            data=df,
-            y=df[model],
-            x="TSV",
-            ax=axs[ix],
-            x_ci="sd",
-            x_estimator=np.mean,
-            robust=True,
-            ci=None,
-        )
-        x, y = df["TSV"].values, df[model].values
-        x = sm.add_constant(x, prepend=False)
-        lr = sm.OLS(y, x)
-        results = lr.fit()
-        print(results.summary())
-        sns.lineplot([-3, 3], [-3, 3], ax=axs[ix])
-        axs[ix].set(ylim=(-4, 4), xlim=(-4, 4))
-        axs[ix].set_aspect("equal", adjustable="box")
-        axs[ix].set(title=model)
-    plt.tight_layout()
